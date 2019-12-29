@@ -48,6 +48,30 @@ var (
 	fY     = flag.Int("y", 0, "start of the image (y)")
 )
 
+func connWorker(wg *sync.WaitGroup, gasp chan interface{}, work chan []byte, counter chan int) {
+	wg.Add(1)
+	defer wg.Done()
+	conn, err := net.Dial("tcp", *fHost)
+	if err != nil {
+		log.Print(err)
+		gasp <- nil
+		return
+	}
+	log.Println("connected")
+	defer conn.Close()
+
+	for w := range work {
+		len, err := conn.Write(w)
+		log.Printf("wrote %d bytes", len)
+		counter <- len
+		if err != nil {
+			log.Print(err)
+			gasp <- nil
+			return
+		}
+	}
+}
+
 func main() {
 	flag.Parse()
 
@@ -101,6 +125,18 @@ func main() {
 		done()
 	}()
 
+	counter := make(chan int, *fN+1)
+	final := make(chan uint64)
+	go func() {
+		var bytes uint64
+		for c := range counter {
+			bytes += uint64(c)
+		}
+		final <- bytes
+	}()
+
+	var wg sync.WaitGroup
+	gasp := make(chan interface{}, *fN)
 	work := make(chan []byte)
 	go func() {
 		for {
@@ -110,6 +146,8 @@ func main() {
 					"ctx closed, closing worker channel")
 				close(work)
 				return
+			case <-gasp:
+				go connWorker(&wg, gasp, work, counter)
 			default:
 				work <- []byte(b.String())
 				if *fOnce {
@@ -120,43 +158,14 @@ func main() {
 		}
 	}()
 
-	var wg sync.WaitGroup
-
-	counter := make(chan int, *fN + 1)
-	final := make(chan uint64)
-	go func() {
-		var bytes uint64
-		for c := range counter {
-			bytes += uint64(c)
-		}
-		final <- bytes
-	}()
-
 	for i := 0; i < *fN; i++ {
-		go func() {
-			defer wg.Done()
-			conn, err := net.Dial("tcp", *fHost)
-			if err != nil {
-				log.Print(err)
-				return
-			}
-			log.Println("connected")
-			defer conn.Close()
-
-			for w := range work {
-				len, err := conn.Write(w)
-				log.Printf("wrote %d bytes", len)
-				counter <- len
-				if err != nil {
-					log.Print(err)
-					return
-				}
-			}
-		}()
-		wg.Add(1)
+		gasp <- nil
 	}
+
+	// synchronisation for runaways …
+	time.Sleep(time.Second)
 	wg.Wait()
 	close(counter)
-	bytes := <-final / (1<<30)
+	bytes := <-final / (1 << 30)
 	log.Printf("total written: %v GiB", bytes)
 }
