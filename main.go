@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"image"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -40,6 +42,7 @@ var (
 	fHost = flag.String(
 		"host", "localhost:1234", "host and port to connect to")
 	fImage = flag.String("image", "image.png", "image file name")
+	fN     = flag.Int("n", 1, "number of concurrent routines")
 	fOnce  = flag.Bool("once", false, "only run once")
 	fX     = flag.Int("x", 0, "start of the image (x)")
 	fY     = flag.Int("y", 0, "start of the image (y)")
@@ -50,7 +53,7 @@ func main() {
 
 	if !*fDeterm {
 		t := time.Now().UnixNano()
-		log.Printf("rand seed: %v", t)
+		log.Println("rand seed:", t)
 		rand.Seed(t)
 	}
 
@@ -65,12 +68,6 @@ func main() {
 	}
 
 	reader.Close()
-
-	conn, err := net.Dial("tcp", *fHost)
-	if err != nil {
-		log.Panic(err)
-	}
-	defer conn.Close()
 
 	min := img.Bounds().Min
 	max := img.Bounds().Max
@@ -90,22 +87,60 @@ func main() {
 		b.WriteString(pxs[i].String())
 	}
 
-	log.Printf("length of pixel data: %v", len(b.String()))
+	log.Println("length of pixel data:", len(b.String()))
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	for ok := true; ok; ok = !*fOnce {
-		n, err := conn.Write([]byte(b.String()))
-		if err != nil {
-			log.Panic(err)
+	ctx, done := context.WithCancel(context.Background())
+	log.Println("ctx:", ctx)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+
+	go func() {
+		s := <-sig
+		log.Println("got signal", s)
+		done()
+	}()
+
+	work := make(chan []byte, *fN+1)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println(
+					"ctx closed, closing worker channel")
+				close(work)
+				return
+			default:
+				work <- []byte(b.String())
+				if *fOnce {
+					close(work)
+					return
+				}
+			}
 		}
-		log.Printf("written %d bytes", n)
-		select {
-		case s := <-c:
-			log.Printf("got signal %v", s)
-			return
-		default:
-			// this space intentionally left blank
-		}
+	}()
+
+	var wg sync.WaitGroup
+	for i := 0; i < *fN; i++ {
+		go func(n int) {
+			defer wg.Done()
+			conn, err := net.Dial("tcp", *fHost)
+			if err != nil {
+				log.Panic(n, err)
+			}
+			defer conn.Close()
+
+			for w := range work {
+				len, err := conn.Write(w)
+				if err != nil {
+					log.Panic(n, err)
+				}
+				log.Printf("%d written %d bytes", n, len)
+			}
+			log.Print(n, " done")
+		}(i)
+		wg.Add(1)
 	}
+	wg.Wait()
+	log.Print("done")
 }
