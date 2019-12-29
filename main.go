@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 )
 
 func pfColorString(c color.Color) string {
@@ -38,6 +39,8 @@ var (
 
 func main() {
 	flag.Parse()
+
+	rand.Seed(time.Now().UnixNano())
 
 	reader, err := os.Open(*flag_image)
 	if err != nil {
