@@ -33,6 +33,7 @@ var (
 	flag_host  = flag.String("host", "localhost:1234", "host and port to connect to")
 	flag_x     = flag.Int("x", 0, "start of the image (x)")
 	flag_y     = flag.Int("y", 0, "start of the image (y)")
+	flag_once  = flag.Bool("once", false, "only run once")
 )
 
 func main() {
@@ -71,5 +72,7 @@ func main() {
 		b.WriteString(pfPixelString(x+*flag_x, y+*flag_y, img.At(x, y)))
 	}
 
-	conn.Write([]byte(b.String()))
+	for ok := true; ok; ok = !*flag_once {
+		conn.Write([]byte(b.String()))
+	}
 }
