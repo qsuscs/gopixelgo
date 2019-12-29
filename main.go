@@ -15,18 +15,21 @@ import (
 	"time"
 )
 
-func pfColorString(c color.Color) string {
-	r, g, b, a := c.RGBA()
-	if byte(a) != 0xff {
-		return fmt.Sprintf("%02x%02x%02x%02x",
-			byte(r), byte(g), byte(b), byte(a))
-	} else {
-		return fmt.Sprintf("%02x%02x%02x", byte(r), byte(g), byte(b))
-	}
+type pfPixel struct {
+	p image.Point
+	c color.Color
 }
 
-func pfPixelString(x, y int, c color.Color) string {
-	return fmt.Sprintf("PX %d %d %s\n", x, y, pfColorString(c))
+func (px pfPixel) String() string {
+	r, g, b, a := px.c.RGBA()
+	x := px.p.X
+	y := px.p.Y
+	var as string
+	if byte(a) != 0xff {
+		as = fmt.Sprintf("%02x", byte(a))
+	}
+	return fmt.Sprintf("PX %d %d %02x%02x%02x%s\n",
+		x, y, byte(r), byte(g), byte(b), as)
 }
 
 var (
@@ -62,17 +65,17 @@ func main() {
 
 	min := img.Bounds().Min
 	max := img.Bounds().Max
-	pxs := make([]image.Point, 0, img.Bounds().Dx()*img.Bounds().Dy())
+	pxs := make([]pfPixel, 0, img.Bounds().Dx()*img.Bounds().Dy())
 	for x := min.X; x < max.X; x++ {
 		for y := min.Y; y < max.Y; y++ {
-			pxs = append(pxs, image.Pt(x, y))
+			pxs = append(pxs, pfPixel{
+				image.Pt(x+*flag_x, y+*flag_y), img.At(x, y)})
 		}
 	}
 
 	var b strings.Builder
 	for _, i := range rand.Perm(len(pxs)) {
-		x, y := pxs[i].X, pxs[i].Y
-		b.WriteString(pfPixelString(x+*flag_x, y+*flag_y, img.At(x, y)))
+		b.WriteString(pxs[i].String())
 	}
 
 	for ok := true; ok; ok = !*flag_once {
