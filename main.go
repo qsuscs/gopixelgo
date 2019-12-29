@@ -8,6 +8,7 @@ import (
 	_ "image/gif" // unused imports to register image decoders
 	_ "image/jpeg"
 	_ "image/png"
+	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -48,24 +49,26 @@ func main() {
 	flag.Parse()
 
 	if !*fDeterm {
-		rand.Seed(time.Now().UnixNano())
+		t := time.Now().UnixNano()
+		log.Printf("rand seed: %v", t)
+		rand.Seed(t)
 	}
 
 	reader, err := os.Open(*fImage)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	img, _, err := image.Decode(reader)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	reader.Close()
 
 	conn, err := net.Dial("tcp", *fHost)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	defer conn.Close()
 
@@ -79,19 +82,27 @@ func main() {
 		}
 	}
 
+	log.Printf("image has %d pixels", len(pxs))
+
 	var b strings.Builder
 	for _, i := range rand.Perm(len(pxs)) {
 		b.WriteString(pxs[i].String())
 	}
 
+	log.Printf("length of pixel data: %v", len(b.String()))
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
-l:
 	for ok := true; ok; ok = !*fOnce {
-		conn.Write([]byte(b.String()))
+		n, err := conn.Write([]byte(b.String()))
+		if err != nil {
+			log.Panic(err)
+		}
+		log.Printf("written %d bytes", n)
 		select {
-		case _ = <-c:
-			break l
+		case s := <-c:
+			log.Printf("got signal %v", s)
+			return
 		default:
 			// this space intentionally left blank
 		}
