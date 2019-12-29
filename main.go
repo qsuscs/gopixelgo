@@ -122,23 +122,26 @@ func main() {
 
 	var wg sync.WaitGroup
 	for i := 0; i < *fN; i++ {
-		go func(n int) {
+		go func() {
 			defer wg.Done()
 			conn, err := net.Dial("tcp", *fHost)
 			if err != nil {
-				log.Panic(n, err)
+				log.Print(err)
+				return
 			}
+			log.Println("connected")
 			defer conn.Close()
 
 			for w := range work {
 				len, err := conn.Write(w)
+				log.Printf("wrote %d bytes", len)
+				counter <- len
 				if err != nil {
-					log.Panic(n, err)
+					log.Print(err)
+					return
 				}
-				log.Printf("%d written %d bytes", n, len)
 			}
-			log.Print(n, " done")
-		}(i)
+		}()
 		wg.Add(1)
 	}
 	wg.Wait()
