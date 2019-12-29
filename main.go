@@ -33,17 +33,22 @@ func (px pfPixel) String() string {
 }
 
 var (
+	fDeterm = flag.Bool(
+		"deterministic", false, "initialise RNG deterministically")
+	fHost = flag.String(
+		"host", "localhost:1234", "host and port to connect to")
 	fImage = flag.String("image", "image.png", "image file name")
-	fHost  = flag.String("host", "localhost:1234", "host and port to connect to")
+	fOnce  = flag.Bool("once", false, "only run once")
 	fX     = flag.Int("x", 0, "start of the image (x)")
 	fY     = flag.Int("y", 0, "start of the image (y)")
-	fOnce  = flag.Bool("once", false, "only run once")
 )
 
 func main() {
 	flag.Parse()
 
-	rand.Seed(time.Now().UnixNano())
+	if !*fDeterm {
+		rand.Seed(time.Now().UnixNano())
+	}
 
 	reader, err := os.Open(*fImage)
 	if err != nil {
