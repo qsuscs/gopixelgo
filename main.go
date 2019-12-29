@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
 	"time"
 )
@@ -83,7 +84,16 @@ func main() {
 		b.WriteString(pxs[i].String())
 	}
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+l:
 	for ok := true; ok; ok = !*fOnce {
 		conn.Write([]byte(b.String()))
+		select {
+		case _ = <-c:
+			break l
+		default:
+			// this space intentionally left blank
+		}
 	}
 }
