@@ -33,11 +33,11 @@ func (px pfPixel) String() string {
 }
 
 var (
-	flag_image = flag.String("image", "image.png", "image file name")
-	flag_host  = flag.String("host", "localhost:1234", "host and port to connect to")
-	flag_x     = flag.Int("x", 0, "start of the image (x)")
-	flag_y     = flag.Int("y", 0, "start of the image (y)")
-	flag_once  = flag.Bool("once", false, "only run once")
+	fImage = flag.String("image", "image.png", "image file name")
+	fHost  = flag.String("host", "localhost:1234", "host and port to connect to")
+	fX     = flag.Int("x", 0, "start of the image (x)")
+	fY     = flag.Int("y", 0, "start of the image (y)")
+	fOnce  = flag.Bool("once", false, "only run once")
 )
 
 func main() {
@@ -45,7 +45,7 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	reader, err := os.Open(*flag_image)
+	reader, err := os.Open(*fImage)
 	if err != nil {
 		panic(err)
 	}
@@ -57,7 +57,7 @@ func main() {
 
 	reader.Close()
 
-	conn, err := net.Dial("tcp", *flag_host)
+	conn, err := net.Dial("tcp", *fHost)
 	if err != nil {
 		panic(err)
 	}
@@ -69,7 +69,7 @@ func main() {
 	for x := min.X; x < max.X; x++ {
 		for y := min.Y; y < max.Y; y++ {
 			pxs = append(pxs, pfPixel{
-				image.Pt(x+*flag_x, y+*flag_y), img.At(x, y)})
+				image.Pt(x+*fX, y+*fY), img.At(x, y)})
 		}
 	}
 
@@ -78,7 +78,7 @@ func main() {
 		b.WriteString(pxs[i].String())
 	}
 
-	for ok := true; ok; ok = !*flag_once {
+	for ok := true; ok; ok = !*fOnce {
 		conn.Write([]byte(b.String()))
 	}
 }
