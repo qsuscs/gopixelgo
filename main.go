@@ -121,6 +121,17 @@ func main() {
 	}()
 
 	var wg sync.WaitGroup
+
+	counter := make(chan int, *fN + 1)
+	final := make(chan uint64)
+	go func() {
+		var bytes uint64
+		for c := range counter {
+			bytes += uint64(c)
+		}
+		final <- bytes
+	}()
+
 	for i := 0; i < *fN; i++ {
 		go func() {
 			defer wg.Done()
@@ -145,5 +156,7 @@ func main() {
 		wg.Add(1)
 	}
 	wg.Wait()
-	log.Print("done")
+	close(counter)
+	bytes := <-final / (1<<30)
+	log.Printf("total written: %v GiB", bytes)
 }
