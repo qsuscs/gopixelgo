@@ -75,10 +75,11 @@ func main() {
 	min := img.Bounds().Min
 	max := img.Bounds().Max
 	pxs := make([]pfPixel, 0, img.Bounds().Dx()*img.Bounds().Dy())
+	offset := image.Pt(*fX, *fY)
 	for x := min.X; x < max.X; x++ {
 		for y := min.Y; y < max.Y; y++ {
 			pxs = append(pxs, pfPixel{
-				image.Pt(x+*fX, y+*fY), img.At(x, y)})
+				image.Pt(x, y).Add(offset), img.At(x, y)})
 		}
 	}
 
