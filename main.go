@@ -101,7 +101,7 @@ func main() {
 		done()
 	}()
 
-	work := make(chan []byte, *fN+1)
+	work := make(chan []byte)
 	go func() {
 		for {
 			select {
