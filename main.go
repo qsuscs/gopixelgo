@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"image"
@@ -118,18 +117,6 @@ func main() {
 
 	log.Println("length of pixel data:", len(b.String()))
 
-	ctx, done := context.WithCancel(context.Background())
-	log.Println("ctx:", ctx)
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
-
-	go func() {
-		s := <-sig
-		log.Println("got signal", s)
-		done()
-	}()
-
 	counter := make(chan int)
 	final := make(chan uint64)
 	go func() {
@@ -144,12 +131,14 @@ func main() {
 	gasp := make(chan interface{})
 	work := make(chan []byte, *fN)
 
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+
 	go func() {
 		for {
 			select {
-			case <-ctx.Done():
-				log.Println(
-					"ctx closed, closing worker channel")
+			case s := <-sig:
+				log.Println("got signal", s)
 				close(work)
 				return
 			case <-gasp:
@@ -163,10 +152,6 @@ func main() {
 
 	for i := 0; i < *fN; i++ {
 		gasp <- nil
-	}
-
-	if *fOnce {
-		done()
 	}
 
 	wg.Wait()
