@@ -51,7 +51,6 @@ var (
 )
 
 func connWorker(wg *sync.WaitGroup, gasp chan interface{}, work chan []byte, counter chan int) {
-	wg.Add(1)
 	defer wg.Done()
 	conn, err := net.Dial("tcp", *fHost)
 	if err != nil {
@@ -76,6 +75,10 @@ func connWorker(wg *sync.WaitGroup, gasp chan interface{}, work chan []byte, cou
 
 func main() {
 	flag.Parse()
+
+	if *fOnce && *fN > 1 {
+		log.Panic("-once does not work with more than one worker")
+	}
 
 	if !*fDeterm {
 		t := time.Now().UnixNano()
@@ -127,7 +130,7 @@ func main() {
 		done()
 	}()
 
-	counter := make(chan int, *fN+1)
+	counter := make(chan int)
 	final := make(chan uint64)
 	go func() {
 		var bytes uint64
@@ -138,8 +141,9 @@ func main() {
 	}()
 
 	var wg sync.WaitGroup
-	gasp := make(chan interface{}, *fN)
+	gasp := make(chan interface{})
 	work := make(chan []byte, *fN)
+
 	go func() {
 		for {
 			select {
@@ -149,13 +153,10 @@ func main() {
 				close(work)
 				return
 			case <-gasp:
+				wg.Add(1)
 				go connWorker(&wg, gasp, work, counter)
-			default:
-				work <- []byte(b.String())
-				if *fOnce {
-					close(work)
-					return
-				}
+			case work <- []byte(b.String()):
+				// this space intentionally left blank
 			}
 		}
 	}()
@@ -164,8 +165,10 @@ func main() {
 		gasp <- nil
 	}
 
-	// synchronisation for runaways …
-	time.Sleep(time.Second)
+	if *fOnce {
+		done()
+	}
+
 	wg.Wait()
 	close(counter)
 	bytes := <-final / (1 << 20)
