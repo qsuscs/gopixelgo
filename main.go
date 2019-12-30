@@ -49,35 +49,37 @@ var (
 	fY     = flag.Int("y", 0, "start of the image (y)")
 )
 
-func connWorker(wg *sync.WaitGroup, gasp chan interface{}, work chan []byte, counter chan int) {
+func connWorker(wg *sync.WaitGroup, work chan []byte, counter chan int) {
 	defer wg.Done()
-	conn, err := net.Dial("tcp", *fHost)
-	if err != nil {
-		log.Print(err)
-		gasp <- nil
-		return
-	}
-	log.Println("connected")
-	defer conn.Close()
-
-	for w := range work {
-		len, err := conn.Write(w)
-		log.Printf("wrote %d bytes", len)
-		counter <- len
+	for {
+		conn, err := net.Dial("tcp", *fHost)
 		if err != nil {
 			log.Print(err)
-			gasp <- nil
+			continue
+		}
+		log.Println("connected")
+		defer conn.Close()
+
+		for w := range work {
+			len, err := conn.Write(w)
+			log.Printf("wrote %d bytes", len)
+			counter <- len
+			if err != nil {
+				log.Print(err)
+				break
+			}
+		}
+		_, more := <-work
+		if !more {
+			// this means work has been closed and we should quit
 			return
 		}
+		// … else there has been some error and we restart the connection
 	}
 }
 
 func main() {
 	flag.Parse()
-
-	if *fOnce && *fN > 1 {
-		log.Panic("-once does not work with more than one worker")
-	}
 
 	if !*fDeterm {
 		t := time.Now().UnixNano()
@@ -128,9 +130,7 @@ func main() {
 	}()
 
 	var wg sync.WaitGroup
-	gasp := make(chan interface{})
 	work := make(chan []byte, *fN)
-
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 
@@ -141,19 +141,20 @@ func main() {
 				log.Println("got signal", s)
 				close(work)
 				return
-			case <-gasp:
-				wg.Add(1)
-				go connWorker(&wg, gasp, work, counter)
 			case work <- []byte(b.String()):
-				// this space intentionally left blank
+				if *fOnce {
+					close(work)
+					return
+				}
 			}
 		}
 	}()
 
 	for i := 0; i < *fN; i++ {
-		gasp <- nil
-	}
+		wg.Add(1)
+		go connWorker(&wg, work, counter)
 
+	}
 	wg.Wait()
 	close(counter)
 	bytes := <-final / (1 << 20)
