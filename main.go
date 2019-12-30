@@ -137,7 +137,7 @@ func main() {
 
 	var wg sync.WaitGroup
 	gasp := make(chan interface{}, *fN)
-	work := make(chan []byte)
+	work := make(chan []byte, *fN)
 	go func() {
 		for {
 			select {
