@@ -166,6 +166,6 @@ func main() {
 	time.Sleep(time.Second)
 	wg.Wait()
 	close(counter)
-	bytes := <-final / (1 << 30)
-	log.Printf("total written: %v GiB", bytes)
+	bytes := <-final / (1 << 20)
+	log.Printf("total written: %v MiB", bytes)
 }
